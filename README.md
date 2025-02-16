@@ -13,54 +13,37 @@ mvn clean package
 
 2. Run the JAR:
 ```bash
-java -jar target/server-manager.jar [command] [options]
+java -jar target/servermanager-1.0-SNAPSHOT.jar
 ```
 
 ### Available Commands
 
 - Start the server:
 ```bash
-java -jar target/server-manager.jar up [--before YYYY-MM-DD]
+up [--before YYYY-MM-DD]
 ```
 
 - Stop the server:
 ```bash
-java -jar target/server-manager.jar down
+down
 ```
 
 - Check server status:
 ```bash
-java -jar target/server-manager.jar status
+status
 ```
 
 - View event history:
 ```bash
-java -jar target/server-manager.jar history [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--sort asc|desc] [--status up|down|failed|starting|stopping]
+history [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--sort asc|desc] [--status up|down|failed|starting|stopping]
 ```
 
 ### Running with Docker
 
-1. Build the Docker image:
+- Pull & Run the Docker image:
 ```bash
-docker build -t server-manager .
-```
-
-2. Run commands using Docker:
-```bash
-# Start server
-docker run -v server-data:/app/data server-manager up
-
-# Start server with scheduled shutdown
-docker run -v server-data:/app/data server-manager up --before 2024-03-20
-
-# Stop server
-docker run -v server-data:/app/data server-manager down
-
-# Check status
-docker run -v server-data:/app/data server-manager status
-
-# View history
-docker run -v server-data:/app/data server-manager history
+docker pull pari3en/servermanager:latest
+docker run -it pari3en/servermanager:latest
 ```
 
 ## Notes
