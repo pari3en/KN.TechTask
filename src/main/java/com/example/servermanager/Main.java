@@ -1,5 +1,6 @@
 package com.example.servermanager;
 
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Scanner;
@@ -20,8 +21,14 @@ public class Main {
     private static final String WELCOME_MESSAGE = "Server Manager Application. Enter commands (type 'exit' to quit):";
     private static final String UNSUPPORTED_COMMAND_MESSAGE = "Unsupported command: ";
 
-    public static void main(String[] args) {
-        ServerManager serverManager = new ServerManager();
+    @Setter
+    private static ServerManager serverManager = new ServerManager();
+
+  public static void main(String[] args) {
+        startApp(serverManager);
+    }
+
+    static void startApp(ServerManager serverManager) {
         Scanner scanner = new Scanner(System.in);
         System.out.print(WELCOME_MESSAGE);
 
