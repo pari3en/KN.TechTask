@@ -181,7 +181,7 @@ public class ServerManagerTest {
         // Verify no new events were logged
         List<Event> events = eventLogger.getAllEvents();
         assertEquals(1, events.size());
-        assertEquals("failed", events.get(0).status());
+        assertEquals("failed", events.getFirst().status());
     }
 
     @Test
@@ -258,7 +258,7 @@ public class ServerManagerTest {
         // Verify no new events were logged
         List<Event> events = eventLogger.getAllEvents();
         assertEquals(1, events.size());
-        assertEquals("stopping", events.get(0).status());
+        assertEquals("stopping", events.getFirst().status());
     }
 
     @Test
@@ -331,8 +331,8 @@ public class ServerManagerTest {
         
         // Verify the shutdown was attempted
         List<Event> events = eventLogger.getAllEvents();
-        assertTrue(events.size() >= 1);
-        assertEquals("starting", events.get(0).status());
+        assertFalse(events.isEmpty());
+        assertEquals("starting", events.getFirst().status());
     }
 
     @Test
@@ -394,9 +394,7 @@ public class ServerManagerTest {
         };
 
         // Start a thread that will be interrupted
-        Thread t = new Thread(() -> {
-            realServerManager.randomPause();
-        });
+        Thread t = new Thread(realServerManager::randomPause);
 
         // Start the thread and immediately interrupt it
         t.start();

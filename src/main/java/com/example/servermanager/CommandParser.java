@@ -3,10 +3,9 @@ package com.example.servermanager;
 import lombok.Getter;
 import org.apache.commons.cli.*;
 
+@Getter
 public class CommandParser {
-    @Getter
     private String command;
-    @Getter
     private CommandLine cmdLine;
     
     private static final Options options = new Options();
