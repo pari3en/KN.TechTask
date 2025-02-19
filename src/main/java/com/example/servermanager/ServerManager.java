@@ -22,7 +22,7 @@ public class ServerManager {
     private static final String DATE_TIME_PATTERN_END = "T23:59:59";
     private static final String SORT_DESC = "desc";
     private final Random random;
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    protected final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
     protected EventLogger eventLogger;
 
@@ -51,7 +51,7 @@ public class ServerManager {
     }
 
     public void up(String before) {
-        // Check if the server is already up
+        // Check if the server is already up or stopping
         List<Event> events = eventLogger.getAllEvents();
         if (!events.isEmpty()) {
             Event lastEvent = events.getLast();
@@ -59,7 +59,16 @@ public class ServerManager {
                 System.out.println("Already up");
                 return;
             }
+            if (STATUS_STOPPING.equalsIgnoreCase(lastEvent.status())) {
+                System.out.println("Server is currently stopping, please wait");
+                return;
+            }
         }
+
+        LocalDateTime now = LocalDateTime.now();
+        Event startingEvent = new Event(STATUS_STARTING, now);
+        eventLogger.logEvent(startingEvent);
+        System.out.println("Starting…");
 
         // If the --before parameter is provided, schedule auto shutdown
         if (before != null) {
@@ -84,11 +93,6 @@ public class ServerManager {
             }
         }
 
-        LocalDateTime now = LocalDateTime.now();
-        Event startingEvent = new Event(STATUS_STARTING, now);
-        eventLogger.logEvent(startingEvent);
-        System.out.println("Starting…");
-
         // Simulate random pause (3-10 seconds)
         randomPause();
 
@@ -104,12 +108,16 @@ public class ServerManager {
     }
 
     public void down() {
-        // Check if the server is already down
+        // Check if the server is already down or in failed state
         List<Event> events = eventLogger.getAllEvents();
         if (!events.isEmpty()) {
             Event lastEvent = events.getLast();
             if (STATUS_DOWN.equalsIgnoreCase(lastEvent.status())) {
                 System.out.println("Already down");
+                return;
+            }
+            if (STATUS_FAILED.equalsIgnoreCase(lastEvent.status())) {
+                System.out.println("Server is in failed state, no need to stop");
                 return;
             }
         }
@@ -178,5 +186,9 @@ public class ServerManager {
             scheduler.shutdownNow();
             Thread.currentThread().interrupt();
         }
+    }
+
+    public boolean isShutdown() {
+        return scheduler.isTerminated();
     }
 }

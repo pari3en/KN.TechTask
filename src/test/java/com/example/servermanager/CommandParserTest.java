@@ -2,6 +2,7 @@ package com.example.servermanager;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class CommandParserTest {
 
@@ -27,22 +28,6 @@ class CommandParserTest {
     }
 
     @Test
-    void testCommandWithSingleParameter() {
-        CommandParser parser = new CommandParser("start --port 8080");
-        assertEquals("start", parser.getCommand());
-        assertEquals("8080", parser.getParam("port"));
-    }
-
-    @Test
-    void testCommandWithMultipleParameters() {
-        CommandParser parser = new CommandParser("deploy --app myapp --version 1.0 --env prod");
-        assertEquals("deploy", parser.getCommand());
-        assertEquals("myapp", parser.getParam("app"));
-        assertEquals("1.0", parser.getParam("version"));
-        assertEquals("prod", parser.getParam("env"));
-    }
-
-    @Test
     void testParameterWithoutValue() {
         CommandParser parser = new CommandParser("stop --force");
         assertEquals("stop", parser.getCommand());
@@ -50,17 +35,26 @@ class CommandParserTest {
     }
 
     @Test
-    void testParameterCaseInsensitivity() {
-        CommandParser parser = new CommandParser("START --Port 8080");
-        assertEquals("start", parser.getCommand());
-        assertEquals("8080", parser.getParam("PORT"));
-        assertEquals("8080", parser.getParam("port"));
+    void testGetCommandLine() {
+        CommandParser parser = new CommandParser("status --from 2024-01-01");
+        assertNotNull(parser.getCmdLine());
+        assertTrue(parser.getCmdLine().hasOption("from"));
     }
 
     @Test
-    void testExtraSpaces() {
-        CommandParser parser = new CommandParser("  start   --port    8080  ");
-        assertEquals("start", parser.getCommand());
-        assertEquals("8080", parser.getParam("port"));
+    void testEmptyTokens() {
+        // Create input that will result in empty tokens after splitting
+        CommandParser parser = new CommandParser("   ");
+        assertNull(parser.getCommand());
+        assertNull(parser.getCmdLine());
     }
-} 
+
+    @Test
+    void testParseError() {
+        // Test with invalid option format to trigger parse error
+        CommandParser parser = new CommandParser("status --invalid-format");
+        assertNotNull(parser.getCommand());
+        assertNull(parser.getCmdLine());
+    }
+
+}

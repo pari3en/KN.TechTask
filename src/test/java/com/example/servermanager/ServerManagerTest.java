@@ -4,6 +4,7 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -84,6 +85,24 @@ public class ServerManagerTest {
     }
 
     @Test
+    void testStatusWithStartingEvent() {
+        eventLogger.logEvent(new Event("starting", LocalDateTime.now()));
+        serverManager.status();
+        String output = outputStream.toString();
+        assertTrue(output.contains("Last event: starting"));
+        assertFalse(output.contains("Uptime:"));
+    }
+
+    @Test
+    void testStatusWithStoppingEvent() {
+        eventLogger.logEvent(new Event("stopping", LocalDateTime.now()));
+        serverManager.status();
+        String output = outputStream.toString();
+        assertTrue(output.contains("Last event: stopping"));
+        assertFalse(output.contains("Uptime:"));
+    }
+
+    @Test
     void testUpCommandInitialStart() {
         serverManager.up(null);
         List<Event> events = eventLogger.getAllEvents();
@@ -154,6 +173,18 @@ public class ServerManagerTest {
     }
 
     @Test
+    void testDownCommandWhenFailed() {
+        eventLogger.logEvent(new Event("failed", LocalDateTime.now()));
+        serverManager.down();
+        assertTrue(outputStream.toString().contains("Server is in failed state"));
+        
+        // Verify no new events were logged
+        List<Event> events = eventLogger.getAllEvents();
+        assertEquals(1, events.size());
+        assertEquals("failed", events.get(0).status());
+    }
+
+    @Test
     void testHistoryWithNoEvents() {
         serverManager.history(null, null, null, null);
         assertTrue(outputStream.toString().contains("No events found"));
@@ -216,5 +247,200 @@ public class ServerManagerTest {
         int upIndex = output.indexOf("up at");
         int downIndex = output.indexOf("down at");
         assertTrue(downIndex < upIndex);
+    }
+
+    @Test
+    void testUpCommandWhenStopping() {
+        eventLogger.logEvent(new Event("stopping", LocalDateTime.now()));
+        serverManager.up(null);
+        assertTrue(outputStream.toString().contains("Server is currently stopping"));
+        
+        // Verify no new events were logged
+        List<Event> events = eventLogger.getAllEvents();
+        assertEquals(1, events.size());
+        assertEquals("stopping", events.get(0).status());
+    }
+
+    @Test
+    void testUpCommandAfterFailedState() {
+        eventLogger.logEvent(new Event("failed", LocalDateTime.now()));
+        serverManager.up(null);
+        List<Event> events = eventLogger.getAllEvents();
+        assertTrue(events.size() >= 2);
+        assertEquals("starting", events.get(1).status());
+    }
+
+    @Test
+    void testUpCommandAfterDownState() {
+        eventLogger.logEvent(new Event("down", LocalDateTime.now()));
+        serverManager.up(null);
+        List<Event> events = eventLogger.getAllEvents();
+        assertTrue(events.size() >= 2);
+        assertEquals("starting", events.get(1).status());
+    }
+
+    @Test
+    void testHistoryWithEmptyStatusFilter() {
+        LocalDateTime now = LocalDateTime.now();
+        eventLogger.logEvent(new Event("up", now.minusHours(2)));
+        eventLogger.logEvent(new Event("down", now.minusHours(1)));
+        
+        serverManager.history(null, null, null, "");
+        String output = outputStream.toString();
+        assertTrue(output.contains("No events found"));
+    }
+
+    @Test
+    void testHistoryWithInvalidSortOrder() {
+        LocalDateTime now = LocalDateTime.now();
+        eventLogger.logEvent(new Event("up", now.minusHours(2)));
+        eventLogger.logEvent(new Event("down", now.minusHours(1)));
+        
+        serverManager.history(null, null, "invalid", null);
+        String output = outputStream.toString();
+        assertTrue(output.contains("up at"));
+        assertTrue(output.contains("down at"));
+    }
+
+    @Test
+    void testHistoryWithFromDateAfterToDate() {
+        LocalDateTime now = LocalDateTime.now();
+        eventLogger.logEvent(new Event("up", now.minusHours(2)));
+        
+        String fromDate = now.toLocalDate().toString();
+        String toDate = now.minusDays(1).toLocalDate().toString();
+        
+        serverManager.history(fromDate, toDate, null, null);
+        assertTrue(outputStream.toString().contains("No events found"));
+    }
+
+    @Test
+    void testRandomPauseInterruption() {
+        Thread.currentThread().interrupt();
+        serverManager.randomPause();
+        assertTrue(Thread.interrupted()); // Clear interrupted status
+    }
+
+    @Test
+    void testUpCommandWithScheduledShutdownInterruption() {
+        LocalDateTime futureTime = LocalDateTime.now().plusSeconds(1);
+        serverManager.up(futureTime.toString());
+        
+        // Interrupt the thread before shutdown completes
+        serverManager.shutdown();
+        
+        // Verify the shutdown was attempted
+        List<Event> events = eventLogger.getAllEvents();
+        assertTrue(events.size() >= 1);
+        assertEquals("starting", events.get(0).status());
+    }
+
+    @Test
+    void testHistoryWithNonMatchingStatusFilter() {
+        LocalDateTime now = LocalDateTime.now();
+        eventLogger.logEvent(new Event("up", now.minusHours(2)));
+        eventLogger.logEvent(new Event("down", now.minusHours(1)));
+        
+        // Test with a status that doesn't match any events
+        serverManager.history(null, null, null, "starting");
+        assertTrue(outputStream.toString().contains("No events found"));
+    }
+
+    @Test
+    void testHistoryWithPartialMatchingStatusFilter() {
+        LocalDateTime now = LocalDateTime.now();
+        eventLogger.logEvent(new Event("starting", now.minusHours(3)));
+        eventLogger.logEvent(new Event("up", now.minusHours(2)));
+        eventLogger.logEvent(new Event("down", now.minusHours(1)));
+        
+        // Test with a status that matches some but not all events
+        serverManager.history(null, null, null, "starting");
+        String output = outputStream.toString();
+        assertTrue(output.contains("starting at"));
+        assertFalse(output.contains("up at"));
+        assertFalse(output.contains("down at"));
+    }
+
+    @Test
+    void testRandomPauseRange() {
+        // Create a ServerManager without overriding randomPause
+        ServerManager realServerManager = new ServerManager() {
+            {
+                this.eventLogger = new EventLogger(TEST_EVENT_FILE);
+            }
+        };
+
+        // Record start time
+        long startTime = System.currentTimeMillis();
+        
+        // Execute randomPause
+        realServerManager.randomPause();
+        
+        // Calculate elapsed time
+        long elapsedTime = System.currentTimeMillis() - startTime;
+        
+        // Verify the pause was within expected range (3000-10000ms)
+        assertTrue(elapsedTime >= 3000, "Pause was shorter than minimum");
+        assertTrue(elapsedTime <= 10000, "Pause was longer than maximum");
+    }
+
+    @Test
+    void testRandomPauseWithInterruption() {
+        // Create a ServerManager without overriding randomPause
+        ServerManager realServerManager = new ServerManager() {
+            {
+                this.eventLogger = new EventLogger(TEST_EVENT_FILE);
+            }
+        };
+
+        // Start a thread that will be interrupted
+        Thread t = new Thread(() -> {
+            realServerManager.randomPause();
+        });
+
+        // Start the thread and immediately interrupt it
+        t.start();
+        t.interrupt();
+
+        // Wait for the thread to finish
+        try {
+            t.join(1000); // Wait up to 1 second for thread to complete
+        } catch (InterruptedException e) {
+            fail("Test thread was interrupted");
+        }
+
+        // Verify the thread completed (was interrupted)
+        assertFalse(t.isAlive(), "Thread should have been interrupted and completed");
+    }
+
+    @Test
+    void testShutdownSuccess() {
+        // Create a new ServerManager with a fresh scheduler
+        ServerManager freshManager = new ServerManager() {
+            {
+                this.eventLogger = new EventLogger(TEST_EVENT_FILE);
+            }
+        };
+        
+        // Schedule a task
+        freshManager.up(LocalDateTime.now().plusSeconds(10).toString());
+        
+        // Shutdown should succeed
+        freshManager.shutdown();
+        
+        // Verify scheduler is terminated
+        assertTrue(freshManager.isShutdown());
+    }
+
+    @Test
+    void testShutdownWithNoScheduledTasks() {
+        ServerManager emptyManager = new ServerManager() {
+            {
+                this.eventLogger = new EventLogger(TEST_EVENT_FILE);
+            }
+        };
+        
+        emptyManager.shutdown();
+        assertTrue(emptyManager.isShutdown());
     }
 }
